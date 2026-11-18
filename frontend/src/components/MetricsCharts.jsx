@@ -11,18 +11,7 @@ import {
 import { BarChart3, Activity, Cpu } from 'lucide-react';
 
 export function MetricsCharts({ performanceHistory = [] }) {
-  // If history is small, provide default points based on current performance
-  const data = performanceHistory.length > 0 
-    ? performanceHistory 
-    : [
-        { frame_id: 1, byte_size: 24100, timestamp: '10:00:00' },
-        { frame_id: 2, byte_size: 24350, timestamp: '10:00:01' },
-        { frame_id: 3, byte_size: 24200, timestamp: '10:00:02' },
-        { frame_id: 4, byte_size: 24450, timestamp: '10:00:03' },
-        { frame_id: 5, byte_size: 24300, timestamp: '10:00:04' },
-      ];
-
-  const formattedData = data.map(d => ({
+  const formattedData = performanceHistory.map(d => ({
     ...d,
     kb_size: Number((d.byte_size / 1024).toFixed(2)),
   }));
@@ -59,7 +48,12 @@ export function MetricsCharts({ performanceHistory = [] }) {
         </div>
       </div>
 
-      <div className="flex-1 w-full min-h-[160px]">
+      <div className="flex-1 w-full min-h-[160px] flex items-center justify-center">
+        {formattedData.length === 0 ? (
+          <div className="text-xs font-mono text-graphite-500 text-center">
+            Waiting for live captured frames to plot ingestion throughput...
+          </div>
+        ) : (
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={formattedData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
             <defs>
@@ -95,6 +89,7 @@ export function MetricsCharts({ performanceHistory = [] }) {
             />
           </AreaChart>
         </ResponsiveContainer>
+        )}
       </div>
     </div>
   );

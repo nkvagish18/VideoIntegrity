@@ -122,7 +122,7 @@ export function HashChainExplorer({ chainRecords, verificationReport }) {
               const linkBroken = prevRec && rec.previous_hash !== prevRec.chain_hash;
 
               return (
-                <React.Fragment key={rec.frame_id}>
+                <React.Fragment key={`${rec.sequence_index}-${rec.frame_id}`}>
                   {/* Cryptographic Link Connector */}
                   {index > 0 && (
                     <div className="flex items-center px-0.5">
@@ -209,7 +209,7 @@ export function HashChainExplorer({ chainRecords, verificationReport }) {
                 const isViolated = violationMap.has(rec.frame_id);
                 return (
                   <tr 
-                    key={rec.frame_id}
+                    key={`${rec.sequence_index}-${rec.frame_id}`}
                     onClick={() => setSelectedFrame(rec)}
                     className={`cursor-pointer transition-colors ${
                       isViolated 

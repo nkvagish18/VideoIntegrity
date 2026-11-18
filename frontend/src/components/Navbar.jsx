@@ -21,8 +21,6 @@ import { socketService } from '../services/socket';
 export function Navbar({ 
   streamState, 
   wsState, 
-  isMock, 
-  toggleMockMode, 
   onResetAll 
 }) {
   const [showSettings, setShowSettings] = useState(false);
@@ -103,30 +101,13 @@ export function Navbar({
             <span>{wsState}</span>
           </div>
 
-          {/* Mode Switcher: Mock Mode vs Live Backend */}
-          <div className="flex items-center rounded-lg bg-graphite-800/90 border border-graphite-700 p-0.5">
-            <button
-              onClick={() => toggleMockMode(true)}
-              className={`px-2.5 py-1 text-xs font-mono rounded transition-colors ${
-                isMock
-                  ? 'bg-sky-500/20 text-sky-300 font-semibold border border-sky-500/30'
-                  : 'text-graphite-400 hover:text-slate-200'
-              }`}
-              title="Autonomous sandbox mode with local cryptographic simulator"
-            >
-              Mock Sandbox
-            </button>
-            <button
-              onClick={() => toggleMockMode(false)}
-              className={`px-2.5 py-1 text-xs font-mono rounded transition-colors ${
-                !isMock
-                  ? 'bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30'
-                  : 'text-graphite-400 hover:text-slate-200'
-              }`}
-              title="Connect to Laptop 1 Backend (http://localhost:8000)"
-            >
-              Live Backend
-            </button>
+          {/* Live Production Backend Indicator */}
+          <div
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono bg-emerald-950/50 text-emerald-300 border border-emerald-500/40"
+            title={`Connected to live backend: ${apiConfig.getBaseUrl()}`}
+          >
+            <Server className="w-3.5 h-3.5 text-emerald-400" />
+            <span>LIVE BACKEND</span>
           </div>
 
           {/* Settings Modal Toggle */}

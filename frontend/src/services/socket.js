@@ -1,16 +1,9 @@
 /**
- * VideoIntegrity — Centralized WebSocket Service Layer
+ * VideoIntegrity — Centralized WebSocket Service Layer (Production Live Backend)
  * Location: frontend/src/services/socket.js
- * 
- * Strict adherence to docs/API_CONTRACT.md (Section 6: ws://HOST:8000/ws/live)
- * 
- * Manages WebSocket connection lifecycle, automatic reconnection, heartbeats,
- * and event dispatching. Seamlessly routes between Live Laptop 1 WebSocket and
- * Mock WebSocket simulator.
+ *
+ * Strict adherence to docs/API_CONTRACT.md (Section 6: ws://HOST:8000/ws/live).
  */
-
-import { apiConfig } from './api';
-import { mockBackend } from './mockBackend';
 
 const DEFAULT_WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/live';
 const STORAGE_KEY_WS_URL = 'videointegrity_ws_url';
@@ -20,19 +13,13 @@ class SocketService {
     this.ws = null;
     this.wsUrl = localStorage.getItem(STORAGE_KEY_WS_URL) || DEFAULT_WS_URL;
     this.state = 'DISCONNECTED'; // 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'ERROR'
-    this.listeners = new Map(); // eventName -> Set of callback functions
+    this.listeners = new Map();
     this.stateListeners = new Set();
     this.reconnectTimer = null;
     this.pingTimer = null;
-    this.mockUnsubscribe = null;
     this.shouldReconnect = true;
     this.reconnectAttempts = 0;
     this.maxReconnectDelay = 10000;
-
-    // React to changes in mock mode setting
-    apiConfig.onMockModeChange((isMock) => {
-      this.reconnect();
-    });
   }
 
   getWsUrl() {
@@ -40,9 +27,9 @@ class SocketService {
   }
 
   setWsUrl(url) {
-    this.wsUrl = url;
-    localStorage.setItem(STORAGE_KEY_WS_URL, url);
-    if (this.state === 'CONNECTED' || this.state === 'CONNECTING') {
+    this.wsUrl = String(url || DEFAULT_WS_URL).trim();
+    localStorage.setItem(STORAGE_KEY_WS_URL, this.wsUrl);
+    if (this.state === 'CONNECTED' || this.state === 'CONNECTING' || this.shouldReconnect) {
       this.reconnect();
     }
   }
@@ -54,8 +41,12 @@ class SocketService {
   setState(newState) {
     if (this.state !== newState) {
       this.state = newState;
-      this.stateListeners.forEach(cb => {
-        try { cb(newState); } catch (e) { console.error('WS state listener error:', e); }
+      this.stateListeners.forEach((cb) => {
+        try {
+          cb(newState);
+        } catch (e) {
+          console.error('WS state listener error:', e);
+        }
       });
     }
   }
@@ -67,7 +58,7 @@ class SocketService {
   }
 
   /**
-   * Subscribe to specific WebSocket events defined in Section 6:
+   * Subscribe to WebSocket events defined in Section 6:
    * 'frame_update' | 'integrity_update' | 'verification_result' | 'tamper_alert' | 'stream_status' | '*'
    */
   subscribe(event, callback) {
@@ -84,20 +75,26 @@ class SocketService {
     };
   }
 
-  dispatchEvent(event, payload) {
-    // Exact event listeners
+  dispatchEvent(event, payload, timestamp) {
     const handlers = this.listeners.get(event);
     if (handlers) {
-      handlers.forEach(cb => {
-        try { cb(payload); } catch (err) { console.error(`Error in WS event handler for ${event}:`, err); }
+      handlers.forEach((cb) => {
+        try {
+          cb(payload, timestamp);
+        } catch (err) {
+          console.error(`Error in WS event handler for ${event}:`, err);
+        }
       });
     }
 
-    // Wildcard listeners
     const wildcardHandlers = this.listeners.get('*');
     if (wildcardHandlers) {
-      wildcardHandlers.forEach(cb => {
-        try { cb(event, payload); } catch (err) { console.error(`Error in WS wildcard handler:`, err); }
+      wildcardHandlers.forEach((cb) => {
+        try {
+          cb(event, payload, timestamp);
+        } catch (err) {
+          console.error('Error in WS wildcard handler:', err);
+        }
       });
     }
   }
@@ -109,33 +106,7 @@ class SocketService {
       this.reconnectTimer = null;
     }
 
-    if (apiConfig.isMockMode()) {
-      this.connectMock();
-    } else {
-      this.connectReal();
-    }
-  }
-
-  connectMock() {
     this.cleanupReal();
-    this.setState('CONNECTING');
-
-    setTimeout(() => {
-      this.setState('CONNECTED');
-      if (this.mockUnsubscribe) {
-        this.mockUnsubscribe();
-      }
-
-      this.mockUnsubscribe = mockBackend.subscribeWs((envelope) => {
-        if (envelope && envelope.event) {
-          this.dispatchEvent(envelope.event, envelope.data, envelope.timestamp);
-        }
-      });
-    }, 150);
-  }
-
-  connectReal() {
-    this.cleanupMock();
     this.setState('CONNECTING');
 
     try {
@@ -151,7 +122,6 @@ class SocketService {
         try {
           const envelope = JSON.parse(messageEvent.data);
           if (envelope && envelope.event) {
-            // Heartbeat pong response
             if (envelope.event === 'pong') {
               return;
             }
@@ -167,7 +137,7 @@ class SocketService {
         this.setState('ERROR');
       };
 
-      this.ws.onclose = (event) => {
+      this.ws.onclose = () => {
         this.stopHeartbeat();
         this.setState('DISCONNECTED');
         if (this.shouldReconnect) {
@@ -212,18 +182,8 @@ class SocketService {
   }
 
   send(data) {
-    if (apiConfig.isMockMode()) {
-      return;
-    }
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(typeof data === 'string' ? data : JSON.stringify(data));
-    }
-  }
-
-  cleanupMock() {
-    if (this.mockUnsubscribe) {
-      this.mockUnsubscribe();
-      this.mockUnsubscribe = null;
     }
   }
 
@@ -247,7 +207,6 @@ class SocketService {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.cleanupMock();
     this.cleanupReal();
     this.setState('DISCONNECTED');
   }
@@ -258,5 +217,4 @@ class SocketService {
   }
 }
 
-// Global singleton WebSocket service
 export const socketService = new SocketService();

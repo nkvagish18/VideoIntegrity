@@ -1,63 +1,52 @@
 /**
- * VideoIntegrity — Centralized API Service Layer
+ * VideoIntegrity — Centralized API Service Layer (Production Live Backend)
  * Location: frontend/src/services/api.js
- * 
- * Strict adherence to docs/API_CONTRACT.md (REST Endpoints 5.1 - 5.8)
- * 
- * Supports seamless switching between Live Backend (Laptop 1: http://localhost:8000)
- * and Realistic Mock Mode for independent UI development and demonstrations.
+ *
+ * Strict adherence to docs/API_CONTRACT.md (REST Endpoints 5.1 - 5.8).
+ * Always communicates with the live FastAPI backend (default: http://localhost:8000).
  */
 
-import { mockBackend } from './mockBackend';
-
-// Default configuration from environment or fallback
 const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-const STORAGE_KEY_MOCK = 'videointegrity_mock_mode';
 const STORAGE_KEY_BASE_URL = 'videointegrity_base_url';
 
-// Determine initial mock mode: default to true if backend isn't configured, or respect localStorage/env
-function getInitialMockMode() {
-  const stored = localStorage.getItem(STORAGE_KEY_MOCK);
-  if (stored !== null) {
-    return stored === 'true';
-  }
-  // If explicitly specified in .env
-  if (import.meta.env.VITE_USE_MOCK !== undefined) {
-    return import.meta.env.VITE_USE_MOCK === 'true';
-  }
-  // Default to mock mode initially so frontend runs out-of-the-box before backend starts
-  return true;
-}
-
-let mockModeActive = getInitialMockMode();
-let currentBaseUrl = localStorage.getItem(STORAGE_KEY_BASE_URL) || DEFAULT_API_BASE_URL;
-const modeListeners = new Set();
+let currentBaseUrl = (localStorage.getItem(STORAGE_KEY_BASE_URL) || DEFAULT_API_BASE_URL).replace(/\/+$/, '');
+const configListeners = new Set();
 
 export const apiConfig = {
-  isMockMode() {
-    return mockModeActive;
-  },
-
-  setMockMode(enabled) {
-    mockModeActive = Boolean(enabled);
-    localStorage.setItem(STORAGE_KEY_MOCK, String(mockModeActive));
-    modeListeners.forEach(fn => fn(mockModeActive));
-  },
-
   getBaseUrl() {
     return currentBaseUrl;
   },
 
   setBaseUrl(url) {
-    currentBaseUrl = url.replace(/\/+$/, '');
+    currentBaseUrl = String(url || DEFAULT_API_BASE_URL).replace(/\/+$/, '');
     localStorage.setItem(STORAGE_KEY_BASE_URL, currentBaseUrl);
+    configListeners.forEach((fn) => {
+      try {
+        fn(currentBaseUrl);
+      } catch (err) {
+        console.error('API config listener error:', err);
+      }
+    });
   },
 
-  onMockModeChange(callback) {
-    modeListeners.add(callback);
-    return () => modeListeners.delete(callback);
-  }
+  onBaseUrlChange(callback) {
+    configListeners.add(callback);
+    return () => configListeners.delete(callback);
+  },
 };
+
+/**
+ * Deterministic canonical JSON string matching docs/API_CONTRACT.md Section 2.3.
+ * Used purely for display in the Frame Inspector modal.
+ */
+export function canonicalJson(frameId, timestamp, frameHash, previousHash) {
+  return JSON.stringify({
+    frame_hash: frameHash,
+    frame_id: frameId,
+    previous_hash: previousHash,
+    timestamp,
+  });
+}
 
 /**
  * Standardized API Error matching Section 7 uniform JSON structure:
@@ -73,13 +62,10 @@ export class ApiError extends Error {
   }
 }
 
-/**
- * Helper for making actual HTTP requests to Laptop 1 backend
- */
 async function request(endpoint, options = {}) {
   const url = `${currentBaseUrl}${endpoint}`;
   const headers = {
-    'Accept': 'application/json',
+    Accept: 'application/json',
     'Content-Type': 'application/json',
     ...(options.headers || {}),
   };
@@ -113,12 +99,16 @@ async function request(endpoint, options = {}) {
     return data;
   } catch (err) {
     if (err instanceof ApiError) throw err;
-    throw new ApiError(0, 'NETWORK_ERROR', err.message || 'Cannot reach backend server. Check host or enable Mock Mode.');
+    throw new ApiError(
+      0,
+      'NETWORK_ERROR',
+      err.message || `Cannot reach backend server at ${currentBaseUrl}. Verify Uvicorn is running.`
+    );
   }
 }
 
 // -------------------------------------------------------------
-// Centralized API Service Implementation (docs/API_CONTRACT.md)
+// REST API Endpoints (docs/API_CONTRACT.md Sections 5.1 - 5.8)
 // -------------------------------------------------------------
 
 /**
@@ -132,10 +122,6 @@ export async function startStream({
   reset_existing = false,
   jpeg_quality = 85,
 } = {}) {
-  if (mockModeActive) {
-    return await mockBackend.startStream({ source, fps, device_index, file_path, reset_existing, jpeg_quality });
-  }
-
   return await request('/api/stream/start', {
     method: 'POST',
     body: JSON.stringify({
@@ -153,10 +139,6 @@ export async function startStream({
  * 5.2 POST /api/stream/stop
  */
 export async function stopStream() {
-  if (mockModeActive) {
-    return await mockBackend.stopStream();
-  }
-
   return await request('/api/stream/stop', {
     method: 'POST',
     body: JSON.stringify({}),
@@ -167,10 +149,6 @@ export async function stopStream() {
  * 5.3 GET /api/stream/status
  */
 export async function getStreamStatus() {
-  if (mockModeActive) {
-    return await mockBackend.getStreamStatus();
-  }
-
   return await request('/api/stream/status', {
     method: 'GET',
   });
@@ -185,10 +163,6 @@ export async function getFrames({
   include_image = false,
   order = 'desc',
 } = {}) {
-  if (mockModeActive) {
-    return await mockBackend.getFrames({ limit, offset, include_image, order });
-  }
-
   const params = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
@@ -204,14 +178,7 @@ export async function getFrames({
 /**
  * 5.5 GET /api/chain
  */
-export async function getChain({
-  limit = 200,
-  offset = 0,
-} = {}) {
-  if (mockModeActive) {
-    return await mockBackend.getChain({ limit, offset });
-  }
-
+export async function getChain({ limit = 200, offset = 0 } = {}) {
   const params = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
@@ -225,14 +192,7 @@ export async function getChain({
 /**
  * 5.6 POST /api/verify
  */
-export async function verifyChain({
-  start_frame_id = null,
-  end_frame_id = null,
-} = {}) {
-  if (mockModeActive) {
-    return await mockBackend.verifyChain({ start_frame_id, end_frame_id });
-  }
-
+export async function verifyChain({ start_frame_id = null, end_frame_id = null } = {}) {
   return await request('/api/verify', {
     method: 'POST',
     body: JSON.stringify({
@@ -251,15 +211,6 @@ export async function simulateTamper({
   swap_with_frame_id = null,
   details = {},
 }) {
-  if (mockModeActive) {
-    return await mockBackend.simulateTamper({
-      tamper_type,
-      target_frame_id,
-      swap_with_frame_id,
-      details,
-    });
-  }
-
   return await request('/api/tamper/simulate', {
     method: 'POST',
     body: JSON.stringify({
@@ -274,13 +225,7 @@ export async function simulateTamper({
 /**
  * 5.8 POST /api/tamper/reset
  */
-export async function resetTamper({
-  clear_all = false,
-} = {}) {
-  if (mockModeActive) {
-    return await mockBackend.resetTamper({ clear_all });
-  }
-
+export async function resetTamper({ clear_all = false } = {}) {
   return await request('/api/tamper/reset', {
     method: 'POST',
     body: JSON.stringify({
@@ -290,14 +235,14 @@ export async function resetTamper({
 }
 
 /**
- * Quick connectivity test to verify if Laptop 1 backend is alive
+ * Connectivity probe to verify the live backend is reachable.
  */
 export async function probeBackendHealth(customUrl = null) {
   const url = (customUrl || currentBaseUrl).replace(/\/+$/, '');
   try {
     const res = await fetch(`${url}/api/stream/status`, {
       method: 'GET',
-      headers: { 'Accept': 'application/json' },
+      headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(3000),
     });
     if (res.ok) {

@@ -13,8 +13,6 @@ import { AlertCircle, CheckCircle2, Shield } from 'lucide-react';
 
 export default function App() {
   const {
-    isMock,
-    toggleMockMode,
     wsState,
     streamState,
     latestFrame,
@@ -41,8 +39,6 @@ export default function App() {
       <Navbar
         streamState={streamState}
         wsState={wsState}
-        isMock={isMock}
-        toggleMockMode={toggleMockMode}
         onResetAll={() => resetTamper(true)}
       />
 

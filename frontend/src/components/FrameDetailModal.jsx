@@ -12,7 +12,7 @@ import {
   Image as ImageIcon,
   Binary
 } from 'lucide-react';
-import { canonicalJson } from '../services/mockBackend';
+import { canonicalJson } from '../services/api';
 
 export function FrameDetailModal({ frame, onClose, isViolated = false, violation = null }) {
   const [copiedKey, setCopiedKey] = useState(null);
