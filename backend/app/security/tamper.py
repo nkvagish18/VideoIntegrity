@@ -309,6 +309,13 @@ class IsolatedTamperSimulator:
             "verification": report,
         }
 
+    def simulate_frame_tamper(
+        self,
+        target_frame_id: Optional[int] = None,
+    ) -> dict[str, Any]:
+        """Convenience method to simulate modifying frame bytes on a stored frame."""
+        return self.simulate("modify_frame_bytes", target_frame_id=target_frame_id)
+
     def reset(self) -> dict[str, Any]:
         """Restore the isolated working copy to the original clean snapshot and re-verify."""
         was_tampered = self.is_tampered
@@ -331,9 +338,34 @@ class IsolatedTamperSimulator:
         }
 
 
+def run_isolated_simulation(
+    records: list[dict[str, Any]],
+    frame_bytes_source: dict[int, bytes] | Callable[[int], Optional[bytes]],
+    tamper_type: str = "modify_frame_bytes",
+    *,
+    target_frame_id: Optional[int] = None,
+    swap_with_frame_id: Optional[int] = None,
+    details: Optional[dict[str, Any]] = None,
+    genesis_hash: str = GENESIS_HASH,
+) -> tuple[IsolatedTamperSimulator, dict[str, Any]]:
+    """Create an isolated simulation sandbox, apply tamper mutation, and run verification.
+
+    Original production records and frame bytes are guaranteed to remain untouched.
+    """
+    sim = IsolatedTamperSimulator(records, frame_bytes_source, genesis_hash=genesis_hash)
+    report = sim.simulate(
+        tamper_type=tamper_type,
+        target_frame_id=target_frame_id,
+        swap_with_frame_id=swap_with_frame_id,
+        details=details,
+    )
+    return sim, report
+
+
 __all__ = [
     "IsolatedTamperSimulator",
     "TAMPER_TYPES",
     "mutate_frame_bytes",
+    "run_isolated_simulation",
     "simulate_tamper",
 ]

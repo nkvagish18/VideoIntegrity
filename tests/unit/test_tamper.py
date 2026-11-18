@@ -9,6 +9,7 @@ import pytest
 from app.security.tamper import (
     TAMPER_TYPES,
     IsolatedTamperSimulator,
+    run_isolated_simulation,
     simulate_tamper,
 )
 from app.security.verification import verify_chain
@@ -121,3 +122,35 @@ def test_tamper_types_constant_matches_contract() -> None:
         "reorder_records",
         "break_link",
     }
+
+
+def test_isolated_simulator_convenience_methods(sample_chain) -> None:
+    records, frames = sample_chain
+    sim = IsolatedTamperSimulator(records, frames)
+
+    # simulate_frame_tamper helper
+    res = sim.simulate_frame_tamper(target_frame_id=2)
+    assert res["tamper_type"] == "modify_frame_bytes"
+    assert res["target_frame_id"] == 2
+    assert res["first_compromised_frame_id"] == 2
+    assert res["verification"]["status"] == "COMPROMISED"
+
+    # Reset restores INTACT
+    reset_report = sim.reset()
+    assert reset_report["integrity_status"] == "INTACT"
+    assert reset_report["verification"]["is_valid"] is True
+
+
+def test_run_isolated_simulation_top_level_helper(sample_chain) -> None:
+    records, frames = sample_chain
+    sim, report = run_isolated_simulation(records, frames, tamper_type="modify_frame_bytes")
+
+    assert report["tamper_type"] == "modify_frame_bytes"
+    assert report["verification"]["is_valid"] is False
+    assert report["first_compromised_frame_id"] is not None
+
+    # Reset restores clean state
+    reset_report = sim.reset()
+    assert reset_report["integrity_status"] == "INTACT"
+    assert reset_report["verification"]["is_valid"] is True
+

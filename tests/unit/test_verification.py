@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 
-from app.security.verification import GENESIS_HASH, verify_chain
+from app.security.verification import GENESIS_HASH, VIOLATION_TYPES, verify_chain
 
 
 def _flip_hex(hex_str: str) -> str:
@@ -256,3 +256,16 @@ def test_subrange_verification(sample_chain) -> None:
     assert report["is_valid"] is True
     assert report["total_records"] == 3
     assert report["valid_records"] == 3
+
+
+def test_violation_types_constant_matches_contract() -> None:
+    assert set(VIOLATION_TYPES) == {
+        "MISSING_FRAME_BYTES",
+        "FRAME_HASH_MISMATCH",
+        "CHAIN_HASH_MISMATCH",
+        "INVALID_GENESIS_LINK",
+        "BROKEN_PREVIOUS_LINK",
+        "DELETED_RECORD",
+        "REORDERED_RECORD",
+    }
+

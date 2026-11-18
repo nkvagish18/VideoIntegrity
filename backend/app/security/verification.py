@@ -23,6 +23,16 @@ from app.services.hashing import (
     utc_now_iso,
 )
 
+VIOLATION_TYPES: tuple[str, ...] = (
+    "MISSING_FRAME_BYTES",
+    "FRAME_HASH_MISMATCH",
+    "CHAIN_HASH_MISMATCH",
+    "INVALID_GENESIS_LINK",
+    "BROKEN_PREVIOUS_LINK",
+    "DELETED_RECORD",
+    "REORDERED_RECORD",
+)
+
 _VERIFICATION_COUNTER_LOCK = threading.Lock()
 _VERIFICATION_COUNTER = 0
 
@@ -365,6 +375,7 @@ def verify_chain(
 
 __all__ = [
     "GENESIS_HASH",
+    "VIOLATION_TYPES",
     "canonical_json",
     "compute_chain_hash",
     "compute_frame_hash",
